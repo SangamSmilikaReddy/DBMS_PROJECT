@@ -146,9 +146,15 @@ class TableWindow(tk.Toplevel):
         add_data_window.mainloop()
 
     def delete_data(self):
-        delete_data_window = DeleteDataWindow(self, self.table_name, self.connection, self.cursor)
-        delete_data_window.configure(background='light blue')  # Set window background color
-        delete_data_window.mainloop()
+        try:
+            self.cursor.execute(f"SHOW KEYS FROM {self.table_name} WHERE Key_name = 'PRIMARY'")
+            primary_key_column = self.cursor.fetchone()
+            primary_key_column_name = primary_key_column[4] if primary_key_column else None
+            delete_data_window = DeleteDataWindow(self, self.table_name, self.connection, self.cursor,primary_key_column_name)
+            delete_data_window.configure(background='light blue')  # Set window background color
+            delete_data_window.mainloop()
+        except mysql.connector.Error as err:
+            print("Error: {}".format(err))
 
     def view_data(self):
         try:
@@ -232,7 +238,7 @@ class AddDataWindow(tk.Toplevel):
 
 
 class DeleteDataWindow(tk.Toplevel):
-    def __init__(self, master, table_name, connection, cursor):
+    def __init__(self, master, table_name, connection, cursor, primary_key_column_name):
         super().__init__(master)
 
         self.title(f"Delete Data from {table_name}")
@@ -241,61 +247,26 @@ class DeleteDataWindow(tk.Toplevel):
         self.table_name = table_name
         self.connection = connection
         self.cursor = cursor
+        self.primary_key_column_name = primary_key_column_name  # Assigning primary_key_column_name as an attribute
 
         self.configure(background='light blue')  # Set window background color
 
         self.create_widgets()
 
     def create_widgets(self):
-        try:
-            # Add label for the table name with larger font
-            table_name_label = tk.Label(self, text=f"View Table {self.table_name}", font=("Arial", 14, "bold"))
-            table_name_label.pack()
+        self.primary_key_label = tk.Label(self, text=f"Delete {self.table_name} using {self.primary_key_column_name}", bg='light blue', font=("Helvetica", 14))
+        self.primary_key_label.grid(row=0, column=0, columnspan=2, padx=5, pady=5)
+        
+        primary_key_entry_label = tk.Label(self, text="Enter Primary Key:", bg='light blue')
+        primary_key_entry_label.grid(row=1, column=0, padx=5, pady=5)
 
-            # Fetch all records from the table
-            self.cursor.execute(f"SELECT * FROM {self.table_name}")
-            self.records = self.cursor.fetchall()
+        self.primary_key_entry = tk.Entry(self)
+        self.primary_key_entry.grid(row=1, column=1, padx=5, pady=5)
 
-            # Create a frame to hold the canvas and scrollbar
-            tree_frame = tk.Frame(self)
-            tree_frame.pack(fill="both", expand=True)
-
-            # Create a canvas
-            canvas = tk.Canvas(tree_frame)
-            canvas.pack(side="left", fill="both", expand=True)
-
-            # Add a scrollbar
-            scrollbar = ttk.Scrollbar(tree_frame, orient="horizontal", command=canvas.xview)
-            scrollbar.pack(side="bottom", fill="x")
-
-            # Create a treeview inside the canvas
-            self.treeview = ttk.Treeview(canvas)
-            self.treeview["columns"] = [column[0] for column in self.cursor.description]
-
-            for column in self.cursor.description:
-                self.treeview.heading(column[0], text=column[0])
-
-            for record in self.records:
-                self.treeview.insert("", "end", values=record)
-
-            self.treeview.pack(fill="both", expand=True)
-
-            # Configure canvas scrolling
-            canvas.create_window((0, 0), window=self.treeview, anchor="nw")
-            canvas.update_idletasks()  # Update the canvas idle tasks
-            canvas.configure(scrollregion=canvas.bbox("all"))  # Set scroll region to the size of the canvas
-
-            # Configure scrollbar
-            canvas.configure(xscrollcommand=scrollbar.set)
-            scrollbar.configure(command=canvas.xview)
-
-            # Bind click event to handle cell editing
-            self.treeview.bind("<ButtonRelease-1>", self.edit_cell)
-
-        except mysql.connector.Error as err:
-            print("Error: {}".format(err))
-
-
+        # Button to delete record
+        self.delete_button = tk.Button(self, text="Delete Record", command=self.delete_record)
+        self.delete_button.grid(row=1, column=2, padx=5, pady=5)
+        
 
     def delete_record(self):
         if not self.primary_key_column_name:
@@ -317,6 +288,7 @@ class DeleteDataWindow(tk.Toplevel):
 
         except mysql.connector.Error as err:
             print("Error: {}".format(err))
+
 
 
 class ViewDataWindow(tk.Toplevel):
@@ -447,5 +419,3 @@ class ViewDataWindow(tk.Toplevel):
 if __name__ == "__main__":
     app = DatabaseViewer()
     app.mainloop()
-
-
